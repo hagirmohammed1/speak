@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تحويل الصوت إلى نص </title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    :root { --primary: #4CAF50; --accent: #e91e63; --bg-start: #667eea; --bg-end: #764ba2; --text-light: #fff; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Cairo', sans-serif; direction: rtl; min-height: 100vh;
+      background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      display: flex; justify-content: center; align-items: center; color: var(--text-light); padding: 10px;
+    }
+    .container {
+      background: rgba(255,255,255,0.1); padding: 20px; border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
+      max-width: 500px; width: 100%;
+    }
+    h2 { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: 16px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 16px; }
+    select, .controls button {
+      font-size: 1rem; padding: 12px; border: none; border-radius: 50px;
+      cursor: pointer; transition: transform .2s ease, box-shadow .2s ease;
+      flex: 1 1 45%; max-width: 200px; display: flex; align-items: center; justify-content: center;
+    }
+    select { background: rgba(255,255,255,0.2); color: var(--text-light); }
+    select:focus, select:hover { background: rgba(255,255,255,0.3); }
+    .controls button { background: var(--primary); color: var(--text-light); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .controls button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    .controls button.recording { background: var(--accent); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(233,30,99,0.7);}50%{box-shadow:0 0 0 20px rgba(233,30,99,0);} }
+    .output {
+      background: rgba(255,255,255,0.2); padding: 16px; min-height: 120px; border-radius: 12px;
+      font-size: 1rem; line-height: 1.4; text-align: right; overflow-wrap: break-word; white-space: pre-wrap;
+    }
+    .typing-effect { border-right:2px solid var(--text-light); animation:typing 2.5s steps(30,end),blink .75s step-end infinite; white-space:nowrap; overflow:hidden; }
+    @keyframes typing{from{width:0}to{width:100%}} @keyframes blink{50%{border-color:transparent}}
+    @media(max-width:400px){ h2{font-size:1.25rem;} select,.controls button{padding:10px;font-size:.9rem;} .output{font-size:.9rem;padding:14px;} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎙️ تحويل الصوت إلى نص</h2>
+    <div class="controls">
+      <select id="languageSelect">
+        <option value="ar-SA">العربية</option>
+        <option value="en-US">English</option>
+      </select>
+      <button id="recordBtn">ابدأ التسجيل</button>
+      <button id="resetBtn">مسح النص</button>
+      <button id="copyBtn">نسخ النص</button>
+    </div>
+    <div class="output" id="outputText">النص سيظهر هنا...</div>
+  </div>
+
+  <script>
+    const recordBtn = document.getElementById('recordBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const outputText = document.getElementById('outputText');
+    const languageSelect = document.getElementById('languageSelect');
+
+    let recognition;
+    let isRecording = false;
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+    } else if ('SpeechRecognition' in window) {
+      recognition = new SpeechRecognition();
+    } else {
+      outputText.textContent = 'المتصفح لا يدعم تحويل الصوت إلى نص مباشرة. استخدم Chrome أو Edge.';
+      throw new Error('Unsupported SpeechRecognition');
+    }
+
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    // التحقق من أذونات الميكروفون
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'microphone' }).then(res => {
+        if (res.state === 'denied') {
+          outputText.textContent = 'يرجى منح الإذن للميكروفون من إعدادات المتصفح.';
+        }
+      });
+    }
+
+    // التعامل مع بدء/إيقاف التسجيل عبر الزر
+    recordBtn.addEventListener('click', () => {
+      if (isRecording) {
+        recognition.stop();
+        return;
+      }
+      // بدء التسجيل
+      outputText.textContent = '';
+      outputText.classList.remove('typing-effect');
+      recordBtn.classList.add('recording');
+      recordBtn.textContent = 'إيقاف التسجيل';
+      recognition.lang = languageSelect.value;
+      recognition.start();
+      isRecording = true;
+    });
+
+    // عند الحصول على نتيجة
+    recognition.onresult = e => {
+      const transcript = e.results[0][0].transcript;
+      outputText.textContent = transcript;
+      outputText.classList.add('typing-effect');
+    };
+
+    // عند حدوث خطأ
+    recognition.onerror = e => {
+      if (e.error === 'not-allowed') {
+        outputText.textContent = 'رفضت الإذن بالوصول إلى الميكروفون. تأكد من السماح بالميكروفون.';
+      } else {
+        outputText.textContent = 'خطأ: ' + e.error;
+      }
+    };
+
+    // عند انتهاء التسجيل
+    recognition.onend = () => {
+      isRecording = false;
+      recordBtn.classList.remove('recording');
+      recordBtn.textContent = 'ابدأ التسجيل';
+    };
+
+    // أزرار مسح ونسخ
+    resetBtn.addEventListener('click', () => {
+      outputText.textContent = '';
+      outputText.classList.remove('typing-effect');
+    });
+    copyBtn.addEventListener('click', () => {
+      const text = outputText.textContent;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = 'تم النسخ!';
+        setTimeout(() => (copyBtn.textContent = 'نسخ النص'), 2000);
+      });
+    });
+  </script>
+</body>
+</html>
