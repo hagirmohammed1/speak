@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>تحويل الصوت إلى نص </title>
+  <title>تحويل الصوت إلى نص - مُحسَّن</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     :root { --primary: #4CAF50; --accent: #e91e63; --bg-start: #667eea; --bg-end: #764ba2; --text-light: #fff; }
@@ -26,19 +26,21 @@
       flex: 1 1 45%; max-width: 200px; display: flex; align-items: center; justify-content: center;
     }
     select { background: rgba(255,255,255,0.2); color: var(--text-light); }
-    select:focus, select:hover { background: rgba(255,255,255,0.3); }
+    select:hover, select:focus { background: rgba(255,255,255,0.3); }
     button { background: var(--primary); color: var(--text-light); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
     button.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(233,30,99,0.7);}50%{box-shadow:0 0 0 20px rgba(233,30,99,0);} }
     .output {
       background: rgba(255,255,255,0.2); padding: 16px; min-height: 120px; border-radius: 12px;
-      font-size: 1rem; line-height: 1.4; text-align: right; overflow-wrap: break-word; white-space: pre-wrap;
+      font-size: 1rem; line-height: 1.5; text-align: right;
+      overflow-y: auto; max-height: 200px;
+      white-space: pre-wrap; word-break: break-word;
       position: relative;
     }
     .typing-effect { border-right:2px solid var(--text-light); animation:typing 2.5s steps(30,end),blink .75s step-end infinite; white-space:nowrap; overflow:hidden; }
     @keyframes typing{from{width:0}to{width:100%}} @keyframes blink{50%{border-color:transparent}}
-    #countdown { position: absolute; top: 5px; left: 10px; font-size: 0.9rem; color: var(--text-light); }
+    #countdown { position: absolute; top: 8px; left: 12px; font-size: 0.9rem; color: var(--text-light); }
     @media(max-width:400px){ h2{font-size:1.25rem;} select,button{padding:10px;font-size:.9rem;} .output{font-size:.9rem;padding:14px;} }
   </style>
 </head>
@@ -60,7 +62,6 @@
       النص سيظهر هنا...
     </div>
   </div>
-
   <script>
     const recordBtn = document.getElementById('recordBtn');
     const pauseBtn = document.getElementById('pauseBtn');
@@ -70,11 +71,8 @@
     const countdownEl = document.getElementById('countdown');
     const langSelect = document.getElementById('languageSelect');
 
-    let recognition;
-    let isRecording = false;
-    let isPaused = false;
-    let countdown = 20;
-    let countdownInterval;
+    let recognition, isRecording=false, isPaused=false;
+    let countdown, countdownInterval;
 
     if ('webkitSpeechRecognition' in window) {
       recognition = new webkitSpeechRecognition();
@@ -84,19 +82,22 @@
       outputText.textContent = 'المتصفح لا يدعم SpeechRecognition.';
       throw new Error('Unsupported SpeechRecognition');
     }
-    recognition.continuous = false;
+
+    // اجعل التسجيل متواصل
+    recognition.continuous = true;
     recognition.interimResults = false;
 
     function startCountdown() {
+      clearCountdown();
       countdown = 20;
-      countdownEl.textContent = countdown + 's';
+      countdownEl.textContent = `${countdown}s`;
       countdownInterval = setInterval(() => {
         countdown--;
-        countdownEl.textContent = countdown + 's';
+        countdownEl.textContent = `${countdown}s`;
         if (countdown <= 0) {
-          clearInterval(countdownInterval);
+          clearCountdown();
           stopRecognition();
-          outputText.textContent = 'توقف تلقائياً لعدم وجود كلام.';
+          outputText.textContent += '\n[تم الإيقاف تلقائيًا لعدم وجود كلام]';
         }
       }, 1000);
     }
@@ -127,27 +128,26 @@
     }
 
     recordBtn.addEventListener('click', () => {
-      if (isRecording && !isPaused) {
-        stopRecognition();
-      } else {
-        startRecognition();
-      }
+      if (isRecording && !isPaused) stopRecognition();
+      else startRecognition();
     });
+
     pauseBtn.addEventListener('click', pauseRecognition);
 
     recognition.onresult = e => {
       clearCountdown();
-      const text = e.results[0][0].transcript;
-      outputText.textContent = text;
+      let fullText = outputText.textContent.replace(/^\d+s/, '');
+      const transcript = e.results[e.results.length-1][0].transcript;
+      fullText += (fullText? '\n':'') + transcript;
+      outputText.textContent = fullText;
       outputText.classList.add('typing-effect');
+      // أعد العدّ
+      startCountdown();
     };
     recognition.onerror = e => {
       clearCountdown();
-      if (e.error === 'not-allowed') {
-        outputText.textContent = 'رفض الإذن بالميكروفون.';
-      } else {
-        outputText.textContent = 'خطأ: ' + e.error;
-      }
+      if (e.error === 'not-allowed') outputText.textContent = 'رفض الإذن بالميكروفون.';
+      else outputText.textContent = 'خطأ: ' + e.error;
       recordBtn.classList.remove('recording');
       isRecording = false;
     };
@@ -155,11 +155,8 @@
       clearCountdown();
       recordBtn.classList.remove('recording');
       isRecording = false;
-      if (isPaused) {
-        isPaused = false;
-      } else {
-        recordBtn.textContent = 'ابدأ التسجيل';
-      }
+      if (isPaused) isPaused = false;
+      else recordBtn.textContent = 'ابدأ التسجيل';
     };
 
     resetBtn.addEventListener('click', () => {
@@ -167,11 +164,10 @@
       clearCountdown();
     });
     copyBtn.addEventListener('click', () => {
-      const text = outputText.textContent;
+      const text = outputText.textContent.trim();
       if (!text) return;
       navigator.clipboard.writeText(text).then(() => {
-        copyBtn.textContent = 'تم النسخ!';
-        setTimeout(() => (copyBtn.textContent = 'نسخ النص'), 2000);
+        copyBtn.textContent = 'تم النسخ!'; setTimeout(() => copyBtn.textContent = 'نسخ النص', 2000);
       });
     });
   </script>
