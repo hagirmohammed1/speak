@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تحويل الصوت إلى نص</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+
+    :root {
+      --primary: #4CAF50;
+      --accent: #e91e63;
+      --bg-start: #667eea;
+      --bg-end: #764ba2;
+      --text-light: #fff;
+      --text-dark: #333;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      direction: rtl;
+      height: 100vh;
+      background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--text-light);
+      overflow: hidden;
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 30px 40px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      max-width: 580px;
+      width: 100%;
+      text-align: center;
+      position: relative;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      font-size: 1.75rem;
+      font-weight: 700;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    select, .controls button {
+      font-size: 1rem;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    select {
+      margin-bottom: 20px;
+      outline: none;
+      background: rgba(255,255,255,0.2);
+      color: var(--text-light);
+    }
+    select:focus, select:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .controls button {
+      background: var(--primary);
+      color: var(--text-light);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controls button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+
+    .controls button.recording {
+      background: var(--accent);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(233,30,99,0.7); }
+      50% { box-shadow: 0 0 0 20px rgba(233,30,99,0); }
+    }
+
+    .output {
+      background: rgba(255,255,255,0.2);
+      padding: 20px;
+      min-height: 140px;
+      border-radius: 12px;
+      font-size: 1.125rem;
+      text-align: right;
+      color: var(--text-light);
+      position: relative;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .typing-effect {
+      border-right: 2px solid var(--text-light);
+      animation: typing 2.5s steps(30,end), blink .75s step-end infinite;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    @keyframes typing { from { width: 0 } to { width: 100% } }
+    @keyframes blink  { 50% { border-color: transparent } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎙️ تحويل الصوت إلى نص - مُحسَّن</h2>
+    <div class="controls">
+      <select id="languageSelect">
+        <option value="ar-SA">العربية</option>
+        <option value="en-US">English</option>
+      </select>
+      <button id="recordBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 14C13.6569 14 15 12.6569 15 11V5C15 3.34315 13.6569 2 12 2C10.3431 2 9 3.34315 9 5V11C9 12.6569 10.3431 14 12 14Z"/>
+          <path d="M19 11C19 14.3137 16.3137 17 13 17H11C7.68629 17 5 14.3137 5 11H7C7 13.7614 9.23858 16 12 16H13C15.7614 16 18 13.7614 18 11H19Z"/>
+          <path d="M12 20C9.243 20 7 17.757 7 15H5C5 18.866 8.134 22 12 22V20Z"/>
+        </svg>
+        <span>ابدأ التسجيل</span>
+      </button>
+      <button id="resetBtn">مسح</button>
+      <button id="copyBtn">نسخ</button>
+    </div>
+    <div class="output" id="outputText">النص سيظهر هنا...</div>
+  </div>
+
+  <script>
+    const recordBtn = document.getElementById('recordBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const copyBtn   = document.getElementById('copyBtn');
+    const outputText = document.getElementById('outputText');
+    const languageSelect = document.getElementById('languageSelect');
+
+    let recognition;
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+    } else if ('SpeechRecognition' in window) {
+      recognition = new SpeechRecognition();
+    } else {
+      alert('المتصفح لا يدعم تحويل الصوت إلى نص مباشرة. استخدم Chrome أو Edge.');
+    }
+
+    if (recognition) {
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recordBtn.addEventListener('click', () => {
+        recognition.lang = languageSelect.value;
+        outputText.textContent = '';
+        outputText.classList.remove('typing-effect');
+        recordBtn.classList.add('recording');
+        recognition.start();
+      });
+
+      recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        outputText.textContent = transcript;
+        outputText.classList.add('typing-effect');
+        recordBtn.classList.remove('recording');
+      };
+
+      recognition.onerror = (e) => {
+        outputText.textContent = 'خطأ: ' + e.error;
+        outputText.classList.remove('typing-effect');
+        recordBtn.classList.remove('recording');
+      };
+
+      recognition.onend = () => {
+        recordBtn.classList.remove('recording');
+      };
+    }
+
+    resetBtn.addEventListener('click', () => {
+      outputText.textContent = '';
+      outputText.classList.remove('typing-effect');
+    });
+
+    copyBtn.addEventListener('click', () => {
+      const text = outputText.textContent;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = 'تم النسخ!';
+        setTimeout(() => copyBtn.textContent = 'نسخ', 2000);
+      });
+    });
+  </script>
+</body>
+</html>
