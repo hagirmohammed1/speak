@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>تحويل الصوت إلى نص </title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>تحويل الصوت إلى نص -</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     :root { --primary: #4CAF50; --accent: #e91e63; --bg-start: #667eea; --bg-end: #764ba2; --text-light: #fff; }
@@ -20,28 +21,25 @@
     }
     h2 { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: 16px; }
     .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 16px; }
-    .controls button, select {
+    .controls button, .controls select {
       font-size: 1rem; padding: 12px; border: none; border-radius: 50px;
       cursor: pointer; transition: transform .2s ease, box-shadow .2s ease;
-      flex: 1 1 45%; max-width: 200px; display: flex; align-items: center; justify-content: center;
+      flex: 1 1 45%; max-width: 200px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--primary); color: var(--text-light); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-    select { background: rgba(255,255,255,0.2); color: var(--text-light); }
-    select:hover, select:focus { background: rgba(255,255,255,0.3); }
-    button { background: var(--primary); color: var(--text-light); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
-    button.recording { background: var(--accent); animation: pulse 1.5s infinite; }
+    .controls select { background: rgba(255,255,255,0.2); color: var(--text-light); }
+    .controls button:hover, .controls select:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    .controls button.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(233,30,99,0.7);}50%{box-shadow:0 0 0 20px rgba(233,30,99,0);} }
     .output {
-      background: rgba(255,255,255,0.2); padding: 16px; min-height: 120px; border-radius: 12px;
-      font-size: 1rem; line-height: 1.5; text-align: right;
-      overflow-y: auto; max-height: 200px;
-      white-space: pre-wrap; word-break: break-word;
+      background: rgba(255,255,255,0.2); padding: 16px; min-height: 120px;
+      border-radius: 12px; font-size: 1rem; line-height: 1.5; text-align: right;
+      overflow-y: auto; max-height: 200px; white-space: pre-wrap; word-break: break-word;
       position: relative;
     }
-    .typing-effect { border-right:2px solid var(--text-light); animation:typing 2.5s steps(30,end),blink .75s step-end infinite; white-space:nowrap; overflow:hidden; }
-    @keyframes typing{from{width:0}to{width:100%}} @keyframes blink{50%{border-color:transparent}}
-    #countdown { position: absolute; top: 8px; left: 12px; font-size: 0.9rem; color: var(--text-light); }
-    @media(max-width:400px){ h2{font-size:1.25rem;} select,button{padding:10px;font-size:.9rem;} .output{font-size:.9rem;padding:14px;} }
+    #countdown { position: absolute; top: 8px; left: 12px; font-size: 0.9rem; }
+    @media(max-width:400px){ h2{font-size:1.25rem;} .controls button, .controls select{padding:10px;font-size:.9rem;} .output{font-size:.9rem;padding:14px;} }
   </style>
 </head>
 <body>
@@ -71,105 +69,90 @@
     const countdownEl = document.getElementById('countdown');
     const langSelect = document.getElementById('languageSelect');
 
-    let recognition, isRecording=false, isPaused=false;
-    let countdown, countdownInterval;
+    let recognition;
+    let isRecording = false;
+    let countdownTimer;
+    let timeLeft = 20;
 
-    if ('webkitSpeechRecognition' in window) {
-      recognition = new webkitSpeechRecognition();
-    } else if ('SpeechRecognition' in window) {
-      recognition = new SpeechRecognition();
-    } else {
+    try {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRec();
+    } catch (e) {
       outputText.textContent = 'المتصفح لا يدعم SpeechRecognition.';
-      throw new Error('Unsupported SpeechRecognition');
+      console.error(e);
     }
 
-    // اجعل التسجيل متواصل
-    recognition.continuous = true;
-    recognition.interimResults = false;
+    if (recognition) {
+      recognition.continuous = true;
+      recognition.interimResults = false;
 
-    function startCountdown() {
-      clearCountdown();
-      countdown = 20;
-      countdownEl.textContent = `${countdown}s`;
-      countdownInterval = setInterval(() => {
-        countdown--;
-        countdownEl.textContent = `${countdown}s`;
-        if (countdown <= 0) {
-          clearCountdown();
-          stopRecognition();
-          outputText.textContent += '\n[تم الإيقاف تلقائيًا لعدم وجود كلام]';
-        }
-      }, 1000);
-    }
-    function clearCountdown() {
-      clearInterval(countdownInterval);
-      countdownEl.textContent = '';
-    }
-
-    function startRecognition() {
-      recognition.lang = langSelect.value;
-      recognition.start();
-      isRecording = true;
-      recordBtn.classList.add('recording');
-      recordBtn.textContent = 'إيقاف التسجيل';
-      pauseBtn.disabled = false;
-      startCountdown();
-    }
-    function stopRecognition() {
-      recognition.stop();
-    }
-    function pauseRecognition() {
-      if (isRecording) {
-        recognition.stop();
-        isPaused = true;
-        clearCountdown();
-        recordBtn.textContent = 'استئناف التسجيل';
+      function updateCountdown() {
+        timeLeft--;
+        countdownEl.textContent = timeLeft + 's';
+        if (timeLeft <= 0) stopRecognition();
       }
+      function startCountdown() {
+        clearInterval(countdownTimer);
+        timeLeft = 20;
+        countdownEl.textContent = timeLeft + 's';
+        countdownTimer = setInterval(updateCountdown, 1000);
+      }
+      function stopCountdown() {
+        clearInterval(countdownTimer);
+        countdownEl.textContent = '';
+      }
+
+      recognition.onspeechstart = () => {
+        // إلغاء العد عند بدء الكلام
+        stopCountdown();
+      };
+
+      function startRecognition() {
+        recognition.lang = langSelect.value;
+        recognition.start();
+        isRecording = true;
+        recordBtn.classList.add('recording');
+        recordBtn.textContent = 'إيقاف التسجيل';
+        pauseBtn.disabled = false;
+        startCountdown();
+      }
+      function stopRecognition() {
+        recognition.stop();
+        isRecording = false;
+        recordBtn.classList.remove('recording');
+        recordBtn.textContent = 'ابدأ التسجيل';
+        stopCountdown();
+      }
+
+      recordBtn.onclick = () => isRecording ? stopRecognition() : startRecognition();
+      pauseBtn.onclick = () => { stopRecognition(); pauseBtn.disabled = true; };
+
+      recognition.onresult = (e) => {
+        stopCountdown();
+        const transcript = Array.from(e.results)
+          .map(r => r[0].transcript).join('\n');
+        outputText.textContent = transcript;
+        startCountdown();
+      };
+      recognition.onerror = (e) => {
+        console.error(e);
+        outputText.textContent = 'خطأ: ' + e.error;
+        stopRecognition();
+      };
+      recognition.onend = () => {
+        if (isRecording) recognition.start();
+      };
     }
 
-    recordBtn.addEventListener('click', () => {
-      if (isRecording && !isPaused) stopRecognition();
-      else startRecognition();
-    });
-
-    pauseBtn.addEventListener('click', pauseRecognition);
-
-    recognition.onresult = e => {
-      clearCountdown();
-      let fullText = outputText.textContent.replace(/^\d+s/, '');
-      const transcript = e.results[e.results.length-1][0].transcript;
-      fullText += (fullText? '\n':'') + transcript;
-      outputText.textContent = fullText;
-      outputText.classList.add('typing-effect');
-      // أعد العدّ
-      startCountdown();
-    };
-    recognition.onerror = e => {
-      clearCountdown();
-      if (e.error === 'not-allowed') outputText.textContent = 'رفض الإذن بالميكروفون.';
-      else outputText.textContent = 'خطأ: ' + e.error;
-      recordBtn.classList.remove('recording');
-      isRecording = false;
-    };
-    recognition.onend = () => {
-      clearCountdown();
-      recordBtn.classList.remove('recording');
-      isRecording = false;
-      if (isPaused) isPaused = false;
-      else recordBtn.textContent = 'ابدأ التسجيل';
-    };
-
-    resetBtn.addEventListener('click', () => {
-      outputText.textContent = '';
-      clearCountdown();
-    });
-    copyBtn.addEventListener('click', () => {
-      const text = outputText.textContent.trim();
-      if (!text) return;
-      navigator.clipboard.writeText(text).then(() => {
-        copyBtn.textContent = 'تم النسخ!'; setTimeout(() => copyBtn.textContent = 'نسخ النص', 2000);
+    resetBtn.onclick = () => { outputText.textContent = ''; stopCountdown(); };
+    copyBtn.onclick = () => {
+      const txt = outputText.textContent.trim();
+      if (!txt) return;
+      navigator.clipboard.writeText(txt).then(() => {
+        copyBtn.textContent = 'تم النسخ!';
+        setTimeout(() => copyBtn.textContent = 'نسخ النص', 2000);
       });
-    });
+    };
   </script>
 </body>
 </html>
